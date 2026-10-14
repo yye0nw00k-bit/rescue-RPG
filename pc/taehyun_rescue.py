@@ -259,7 +259,7 @@ class TaehyunRescue:
         self.load_game(self.current_user)
         self.show_game()
         if self.game_clear:
-            self.set_message("태현이 구출 완료! 다시 모험하거나 기록을 확인하세요.", 5)
+            self.set_message("태현이 키우기를 이어서 할 수 있어요.", 5)
         elif self.message == "":
             self.set_message("온라인 계정으로 모험을 시작합니다!")
 
@@ -1587,12 +1587,16 @@ class TaehyunRescue:
         if not self.canvas or not self.canvas.winfo_exists():
             return
         now = time.perf_counter()
-        dt = min(.04,max(0.0,now-self.last_tick))
+        dt = min(.05,max(0.0,now-self.last_tick))
         self.last_tick = now
-        self.update_world(dt,max(1,self.canvas.winfo_width()))
+        if self.game_clear:
+            self.update_raising(dt)
+        else:
+            self.update_world(dt,max(1,self.canvas.winfo_width()))
         self.draw_game()
-        if time.time()-self.last_save >= 12:
+        if time.time()-self.last_save >= 20:
             self.save_game()
+        # 60FPS 전체 캔버스 재생성은 저사양 PC에서 무거워 30FPS로 조정합니다.
         self.root.after(33,lambda:self.tick(session))
 
 
