@@ -10,6 +10,7 @@ import math
 import random
 import secrets
 import time
+import threading
 import tkinter as tk
 from datetime import date
 from pathlib import Path
@@ -118,6 +119,8 @@ def default_save():
         "skill_levels": {"power": 0, "vitality": 0},
         "claimed_quests": [], "achievements": [], "pets": [],
         "daily_claim": "", "game_clear": False, "rebirth_count": 0, "current_dialogue": None,
+        "taehyun_hunger": 25.0, "taehyun_happiness": 70.0,
+        "taehyun_level": 1, "taehyun_exp": 0, "taehyun_feed_count": 0, "taehyun_play_count": 0,
     }
 
 
@@ -155,6 +158,10 @@ class TaehyunRescue:
         self.game_clear = False
         self.rebirth_count = 0
         self.current_dialogue = None
+        self.taehyun_hunger, self.taehyun_happiness = 25.0, 70.0
+        self.taehyun_level, self.taehyun_exp = 1, 0
+        self.taehyun_feed_count = self.taehyun_play_count = 0
+        self._save_upload_lock = threading.Lock()
         self.last_tick = time.perf_counter()
         self.last_save = time.time()
         self.last_attack = 0.0
@@ -302,6 +309,12 @@ class TaehyunRescue:
         self.achievements = list(data.get("achievements", []))
         self.pets = list(data.get("pets", []))
         self.game_clear = bool(data.get("game_clear", False))
+        self.taehyun_hunger = max(0.0, min(100.0, float(data.get("taehyun_hunger", 25))))
+        self.taehyun_happiness = max(0.0, min(100.0, float(data.get("taehyun_happiness", 70))))
+        self.taehyun_level = max(1, int(data.get("taehyun_level", 1)))
+        self.taehyun_exp = max(0, int(data.get("taehyun_exp", 0)))
+        self.taehyun_feed_count = max(0, int(data.get("taehyun_feed_count", 0)))
+        self.taehyun_play_count = max(0, int(data.get("taehyun_play_count", 0)))
         self.rebirth_count = max(0, int(data.get("rebirth_count", 0)))
         self.current_dialogue = data.get("current_dialogue")
         self.player_x = float(data.get("player_x", 160))
@@ -311,7 +324,7 @@ class TaehyunRescue:
         self.monsters, self.particles = [], []
         self.monster_timer = 0.0
         self.auto_attack = False
-        self.active_panel = "ending" if self.game_clear else ("dialogue" if self.current_dialogue else None)
+        self.active_panel = "raising" if self.game_clear else ("dialogue" if self.current_dialogue else None)
         self.skill_cooldowns = {1: 0.0, 2: 0.0, 3: 0.0}
         self.last_attack = self.last_hit = 0.0
         self._daily_claim = str(data.get("daily_claim", ""))
@@ -337,6 +350,9 @@ class TaehyunRescue:
             "claimed_quests": self.claimed_quests, "achievements": self.achievements,
             "pets": self.pets, "daily_claim": self._daily_claim, "game_clear": self.game_clear,
             "rebirth_count": self.rebirth_count, "current_dialogue": self.current_dialogue,
+            "taehyun_hunger": self.taehyun_hunger, "taehyun_happiness": self.taehyun_happiness,
+            "taehyun_level": self.taehyun_level, "taehyun_exp": self.taehyun_exp,
+            "taehyun_feed_count": self.taehyun_feed_count, "taehyun_play_count": self.taehyun_play_count,
         }
 
     def save_game(self, exiting=False):
@@ -347,12 +363,20 @@ class TaehyunRescue:
         self.saves[self.current_user] = payload
         write_json(SAVE_FILE, self.saves)  # 서버 장애 시를 위한 이 PC의 임시 백업
         if self.api_token:
-            try:
-                api_request("/api/save", method="PUT", payload=payload, token=self.api_token, timeout=10)
-            except RuntimeError:
-                # 자동 저장 중 일시적인 통신 오류가 나도 게임을 멈추지 않습니다.
-                pass
+            snapshot = json.loads(json.dumps(payload, ensure_ascii=False))
+            threading.Thread(target=self._upload_save_background,
+                             args=(self.api_token, snapshot), daemon=True).start()
         self.last_save = time.time()
+
+    def _upload_save_background(self, token, payload):
+        if not self._save_upload_lock.acquire(blocking=False):
+            return
+        try:
+            api_request("/api/save", method="PUT", payload=payload, token=token, timeout=4)
+        except RuntimeError:
+            pass
+        finally:
+            self._save_upload_lock.release()
 
     def logout(self):
         self.tick_session += 1
@@ -522,9 +546,10 @@ class TaehyunRescue:
                     "reward": "태현이를 구출했습니다! 원한다면 환생하여 더 강해질 수 있습니다.",
                     "zone": len(ZONES),
                 }
-                self.active_panel = "ending"
+                self.active_panel = "raising"
+                self.root.title("태현이 키우기")
                 self.save_game()
-                self.set_message("최종 보스를 격파했습니다! 태현이를 구출했어요.", 8)
+                self.set_message("태현이 구출 완료! 이제 태현이 키우기가 시작됩니다.", 8)
             self.check_achievements()
         else:
             if random.random() < .16:
@@ -739,6 +764,7 @@ class TaehyunRescue:
         self.claimed_quests = []
         # 업적과 동료는 환생 후에도 유지됩니다.
         self.game_clear = False
+        self.root.title("태현이 구하기(?)")
         self.current_dialogue = None
         self.active_panel = None
         self.monsters.clear()
@@ -746,6 +772,55 @@ class TaehyunRescue:
         self.auto_attack = False
         self.save_game()
         self.set_message(f"환생 {self.rebirth_count}회! 공격력과 최대 HP 보너스를 얻었습니다.", 5)
+
+
+    # -------------------------- 태현이 키우기 --------------------------
+    def gain_taehyun_exp(self, amount):
+        self.taehyun_exp += int(amount)
+        leveled = False
+        while self.taehyun_exp >= self.taehyun_level * 30:
+            self.taehyun_exp -= self.taehyun_level * 30
+            self.taehyun_level += 1
+            leveled = True
+        return leveled
+
+    def feed_taehyun(self):
+        if not self.game_clear:
+            return
+        if self.gold < 25:
+            self.set_message("밥을 사려면 골드 25개가 필요해요.", 2)
+            return
+        self.gold -= 25
+        self.taehyun_hunger = max(0.0, self.taehyun_hunger - 32)
+        self.taehyun_happiness = min(100.0, self.taehyun_happiness + 5)
+        self.taehyun_feed_count += 1
+        self.save_game()
+        self.set_message("태현이에게 밥을 줬어요. 배고픔이 줄었습니다!", 3)
+
+    def play_with_taehyun(self):
+        if not self.game_clear:
+            return
+        self.taehyun_hunger = min(100.0, self.taehyun_hunger + 7)
+        self.taehyun_happiness = min(100.0, self.taehyun_happiness + 18)
+        leveled = self.gain_taehyun_exp(6)
+        self.taehyun_play_count += 1
+        self.save_game()
+        self.set_message("태현이와 신나게 놀았어요!" + (f" 태현이 Lv.{self.taehyun_level} 성장!" if leveled else ""), 3)
+
+    def train_with_taehyun(self):
+        if not self.game_clear:
+            return
+        self.taehyun_hunger = min(100.0, self.taehyun_hunger + 12)
+        self.taehyun_happiness = min(100.0, self.taehyun_happiness + 4)
+        leveled = self.gain_taehyun_exp(15)
+        self.save_game()
+        suffix = f" 태현이가 Lv.{self.taehyun_level}로 성장했어요!" if leveled else " 경험치를 얻었어요."
+        self.set_message("태현이와 함께 훈련했어요!" + suffix, 3)
+
+    def update_raising(self, dt):
+        # 돌봄 수치는 천천히 변해 게임을 오래 켜 두어도 급격히 나빠지지 않습니다.
+        self.taehyun_hunger = min(100.0, self.taehyun_hunger + dt * 0.08)
+        self.taehyun_happiness = max(0.0, self.taehyun_happiness - dt * 0.025)
 
     # -------------------------- 관리자 --------------------------
     def refresh_admin_data(self):
@@ -875,6 +950,7 @@ class TaehyunRescue:
 
     # -------------------------- 입력 / 게임 업데이트 --------------------------
     def show_game(self):
+        self.root.title("태현이 키우기" if self.game_clear else "태현이 구하기(?)")
         self.tick_session += 1
         if self.frame:
             self.frame.destroy()
@@ -1164,6 +1240,9 @@ class TaehyunRescue:
                 c.create_polygon(sx+5,gy-87,sx+19,gy-112,sx+32,gy-87,fill="#302e3b",outline="#65566c")
 
     def draw_game(self):
+        if self.game_clear:
+            self.draw_raising_game()
+            return
         c = self.canvas
         c.delete("all")
         sw, sh = max(1,c.winfo_width()), max(1,c.winfo_height())
@@ -1261,6 +1340,91 @@ class TaehyunRescue:
             self.draw_text(p["x"]-camera_x,gy-85-p["rise"],p["text"],10,"#ffdf86","center",True)
         if self.active_panel:
             self.draw_overlay(sw,sh)
+
+
+    def draw_raising_game(self):
+        c = self.canvas
+        c.delete("all")
+        sw, sh = max(1, c.winfo_width()), max(1, c.winfo_height())
+        c.configure(bg="#bfe0ee")
+        gy = int(sh * 0.70)
+
+        # 단순한 도형과 적은 오브젝트로 꾸민 돌봄 화면입니다.
+        c.create_rectangle(0, 0, sw, sh, fill="#bfe0ee", outline="")
+        c.create_oval(-sw*.12, gy-100, sw*.43, gy+80, fill="#9dcfae", outline="")
+        c.create_oval(sw*.34, gy-120, sw*1.12, gy+80, fill="#86bd9b", outline="")
+        c.create_rectangle(0, gy, sw, sh, fill="#72a96e", outline="")
+        c.create_rectangle(0, gy, sw, gy+13, fill="#9ccb80", outline="")
+
+        house_x = sw - 130
+        c.create_rectangle(house_x-58, gy-100, house_x+58, gy, fill="#f0d3a1", outline="#765943", width=2)
+        c.create_polygon(house_x-72, gy-98, house_x, gy-158, house_x+72, gy-98,
+                         fill="#bc765b", outline="#765943", width=2)
+        c.create_rectangle(house_x-13, gy-49, house_x+13, gy, fill="#7b6658", outline="#604b3e")
+        c.create_rectangle(58, gy-66, 72, gy, fill="#886244", outline="")
+        c.create_oval(27, gy-126, 103, gy-51, fill="#4e9465", outline="#39754e", width=2)
+        c.create_oval(45, gy-147, 111, gy-85, fill="#68a96d", outline="#39754e", width=2)
+
+        self.draw_text(sw/2, 17, "태현이 키우기", 23, "#26445b", "center", True)
+        self.draw_text(sw/2, 49, "드디어 구출했어요! 이제 밥도 주고, 놀고, 함께 성장해 봐요.", 10, "#38576b", "center")
+
+        c.create_rectangle(16, 78, 254, 219, fill="#f5f3e9", outline="#7897a2", width=2)
+        self.draw_text(30, 88, "태현이의 오늘", 12, "#304b5a", bold=True)
+        self.draw_text(30, 119, f"배고픔 {int(self.taehyun_hunger)} / 100", 9, "#304b5a")
+        c.create_rectangle(30, 139, 235, 150, fill="#d8d8cf", outline="")
+        c.create_rectangle(30, 139, 30+205*self.taehyun_hunger/100, 150, fill="#d88158", outline="")
+        self.draw_text(30, 160, f"기분 {int(self.taehyun_happiness)} / 100", 9, "#304b5a")
+        c.create_rectangle(30, 180, 235, 191, fill="#d8d8cf", outline="")
+        c.create_rectangle(30, 180, 30+205*self.taehyun_happiness/100, 191, fill="#6bb982", outline="")
+        self.draw_text(30, 199, f"보유 골드 {self.gold:,} G", 9, "#8a6635", bold=True)
+
+        c.create_rectangle(sw-250, 78, sw-16, 186, fill="#f5f3e9", outline="#7897a2", width=2)
+        self.draw_text(sw-234, 88, "함께한 시간", 12, "#304b5a", bold=True)
+        self.draw_text(sw-234, 119, f"태현이 Lv.{self.taehyun_level}", 13, "#5b7392", bold=True)
+        self.draw_text(sw-234, 144, f"EXP {self.taehyun_exp} / {self.taehyun_level*30}", 9, "#304b5a")
+        c.create_rectangle(sw-234, 161, sw-32, 171, fill="#d8d8cf", outline="")
+        c.create_rectangle(sw-234, 161, sw-234+202*min(1,self.taehyun_exp/max(1,self.taehyun_level*30)), 171,
+                           fill="#76a9d5", outline="")
+
+        scale = min(1.35, 0.82 + self.taehyun_level * 0.035)
+        px, py = sw * 0.50, gy
+        r = 28 * scale
+        c.create_oval(px-r*1.35, py-2, px+r*1.35, py+10, fill="#4d805d", outline="")
+        c.create_line(px-11*scale, py-28*scale, px-14*scale, py-2, fill="#526c8d", width=max(3,int(6*scale)))
+        c.create_line(px+11*scale, py-28*scale, px+14*scale, py-2, fill="#526c8d", width=max(3,int(6*scale)))
+        c.create_rectangle(px-25*scale, py-68*scale, px+25*scale, py-24*scale,
+                           fill="#8e9ec6", outline="#536b91", width=2)
+        c.create_oval(px-31*scale, py-126*scale, px+31*scale, py-64*scale,
+                      fill="#f2c9a6", outline="#a47a61", width=2)
+        c.create_arc(px-33*scale, py-132*scale, px+33*scale, py-75*scale,
+                     start=0, extent=180, fill="#49352f", outline="#49352f", width=max(3,int(5*scale)))
+        c.create_oval(px-13*scale, py-101*scale, px-7*scale, py-94*scale, fill="#29333d", outline="")
+        c.create_oval(px+7*scale, py-101*scale, px+13*scale, py-94*scale, fill="#29333d", outline="")
+        c.create_arc(px-9*scale, py-96*scale, px+10*scale, py-80*scale,
+                     start=200, extent=140, style="arc", outline="#9b5d52", width=2)
+        self.draw_text(px, py-154*scale, "태현", 12, "#fff3cf", "center", True)
+        if self.taehyun_happiness >= 80:
+            self.draw_text(px+55*scale, py-112*scale, "♪", 20, "#fff2a8", "center", True)
+        elif self.taehyun_hunger >= 80:
+            self.draw_text(px+55*scale, py-112*scale, "배고파!", 9, "#7d4c40", "center", True)
+
+        actions = [
+            ("밥 주기 · 25G", self.feed_taehyun, self.gold >= 25),
+            ("놀아주기", self.play_with_taehyun, True),
+            ("함께 훈련", self.train_with_taehyun, True),
+            ("환생해서 모험", self.rebirth, True),
+            ("로그아웃", self.logout, True),
+        ]
+        gap = 8
+        bw = min(146, max(88, (sw-36-gap*(len(actions)-1))/len(actions)))
+        total = bw*len(actions) + gap*(len(actions)-1)
+        start_x = (sw-total)/2
+        by1, by2 = sh-65, sh-25
+        for i, (label, command, enabled) in enumerate(actions):
+            bx = start_x + i*(bw+gap)
+            self.click_button(bx, by1, bx+bw, by2, label, command, enabled)
+        if time.time() < self.message_until and self.message:
+            self.draw_text(sw/2, sh-88, self.message, 10, "#fff7d5", "center", True)
 
     def draw_overlay(self, sw, sh):
         c = self.canvas
@@ -1429,7 +1593,7 @@ class TaehyunRescue:
         self.draw_game()
         if time.time()-self.last_save >= 12:
             self.save_game()
-        self.root.after(16,lambda:self.tick(session))
+        self.root.after(33,lambda:self.tick(session))
 
 
 if __name__ == "__main__":
