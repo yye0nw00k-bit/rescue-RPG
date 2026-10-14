@@ -1,19 +1,40 @@
-# 태현이 구하기(?) / Rescue RPG
+# 태현이 구하기(?)
 
-PC용 2D RPG와 Android용 터치 프로젝트입니다.
+PC와 Android용 2D 횡스크롤 RPG 프로젝트입니다. 13개 지역을 돌파하고 마지막 보스를 물리쳐 태현이를 구출하세요.
 
-- `pc/`: Python/Tkinter PC 버전
-- `android/`: Kivy Android 버전
-- `.github/workflows/android.yml`: GitHub Actions에서 APK 빌드
+## 플랫폼
 
-## 현재 초기 업로드 단계
-저장소 초기 설정 과정에서 `project_bundle.zip`을 자동으로 풀어 소스 파일을 배치하는 워크플로를 실행합니다. 워크플로가 끝나면 PC/Android 소스가 일반 파일로 보이게 됩니다.
+- **Windows PC:** Python 3 + tkinter. pygame은 필요하지 않습니다.
+- **Android:** Kivy 기반 프로젝트입니다. 저장소의 GitHub Actions에서 APK 빌드를 실행할 수 있습니다.
 
-## PC 실행
-Windows에 Python 3와 Tkinter가 설치되어 있어야 합니다. `pc/실행하기.bat`을 실행하세요.
+## PC에서 실행
 
-## Android APK
-저장소의 **Actions** 탭에서 **Build Android APK**를 실행한 다음, 성공한 실행의 `taehyun-rescue-apk` 아티팩트를 다운로드하세요. APK는 아직 사전 컴파일된 파일이 아닙니다.
+1. Python 3을 설치합니다. tkinter가 포함되어 있어야 합니다.
+2. `pc` 폴더에서 `실행하기.bat`을 더블 클릭하거나 실행합니다.
 
-## 참고
-계정과 저장 데이터는 로컬 기기에 저장됩니다. 기기 간 온라인 계정 동기화는 포함되지 않습니다.
+```bat
+python taehyun_rescue.py
+```
+
+## Android APK 빌드
+
+1. GitHub의 **Actions** 탭을 엽니다.
+2. **Build Android APK** 워크플로를 선택합니다.
+3. **Run workflow**를 눌러 빌드를 시작합니다.
+4. 완료된 실행 화면의 **Artifacts**에서 `taehyun-rescue-apk`를 다운로드합니다.
+5. 내려받은 ZIP 안의 APK 파일을 Android 기기에 설치해 테스트합니다.
+
+이 저장소에는 컴파일된 APK가 포함되어 있지 않습니다. GitHub Actions가 APK를 빌드하도록 설정되어 있습니다. APK 빌드는 Android SDK/NDK와 관련 도구를 내려받고 컴파일해야 하므로 시간이 걸릴 수 있으며, 빌드 성공이 보장되는 것은 아닙니다.
+
+## 스토리
+
+- 13개 모험 지역과 보스
+- 첫 12개 보스 이후 각기 다른 NPC가 등장해 “태현이는 여기에 없어요. 일단 이거 받으세요.”라고 말하고 보상을 줍니다.
+- 최종 보스 이후 이름표가 ‘태현’인 인물이 등장해 플레이어 닉네임을 넣어 “고마워요 [닉네임], 환생할 기회를 줄게요.”라고 말합니다.
+- 엔딩 후 환생으로 다시 모험할 수 있습니다.
+
+## 계정과 저장 데이터
+
+- 기본 관리자 계정: 아이디 `연욱`, 비밀번호 `151013`
+- 계정과 진행 데이터는 기기별 로컬 저장 방식이며, 서버 계정이나 클라우드 동기화는 없습니다.
+- 관리자 기능은 해당 기기의 로컬 저장 데이터에만 적용됩니다. 공개 소스이므로 기본 게임 관리자 로그인 정보도 소스에서 확인할 수 있습니다.
