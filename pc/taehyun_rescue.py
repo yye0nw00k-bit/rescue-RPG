@@ -14,6 +14,12 @@ import tkinter as tk
 from datetime import date
 from pathlib import Path
 from tkinter import messagebox
+import os
+import urllib.error
+import urllib.request
+from urllib.parse import quote
+
+API_BASE = os.getenv("TAEHYUN_API_URL", "https://taehyun-rescue-api.onrender.com").rstrip("/")
 
 APP_DIR = Path.home() / ".taehyun_growing"
 APP_DIR.mkdir(exist_ok=True)
@@ -71,6 +77,31 @@ def write_json(path, data):
     tmp.replace(path)
 
 
+def api_request(path, method="GET", payload=None, token=None, timeout=25):
+    """공용 계정 서버 요청. API 주소는 TAEHYUN_API_URL 환경 변수로 바꿀 수 있습니다."""
+    url = API_BASE + path
+    data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Accept": "application/json"}
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        try:
+            body = json.loads(exc.read().decode("utf-8"))
+            detail = body.get("detail", "서버에서 요청을 거부했습니다.")
+        except Exception:
+            detail = "서버에서 요청을 거부했습니다."
+        raise RuntimeError(str(detail)) from exc
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("온라인 서버에 연결할 수 없습니다. 서버가 깨어날 때까지 잠시 후 다시 시도해 주세요.") from exc
+
+
 def hash_password(password, salt=None):
     salt = salt or secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 180_000).hex()
@@ -101,6 +132,8 @@ class TaehyunRescue:
         self.saves = read_json(SAVE_FILE, {})
         self.seed_admin_account()
         self.current_user = None
+        self.api_token = None
+        self.admin_saves = {}
         self.nickname, self.role, self.mode = "", "player", "login"
         self.frame = self.canvas = None
         self.tick_session = 0
@@ -135,10 +168,9 @@ class TaehyunRescue:
 
     # -------------------------- 계정과 저장 --------------------------
     def seed_admin_account(self):
+        # 온라인 관리자 계정은 api.py의 비공개 Render 환경 변수로만 생성합니다.
+        # 이 PC에 하드코딩된 관리자 비밀번호를 다시 만들지 않습니다.
         self.users = read_json(USERS_FILE, {})
-        salt, digest = hash_password("151013")
-        self.users["연욱"] = {"salt": salt, "hash": digest, "role": "admin", "nickname": "연욱", "banned": False}
-        write_json(USERS_FILE, self.users)
 
     def set_message(self, text, seconds=3):
         self.message, self.message_until = str(text), time.time() + seconds
@@ -175,12 +207,12 @@ class TaehyunRescue:
             fg="#171b25", activebackground="#d1ad65", relief="flat",
             font=("Malgun Gothic", 11, "bold"), pady=10)
         self.submit_btn.pack(fill="x", pady=(19, 10))
-        self.auth_message = tk.Label(card, text="계정과 게임 데이터는 현재 PC에 저장됩니다.", bg="#202a3c",
+        self.auth_message = tk.Label(card, text="계정과 게임 데이터는 온라인 서버에 저장됩니다.", bg="#202a3c",
             fg="#a8b5c8", wraplength=400, font=("Malgun Gothic", 9))
         self.auth_message.pack(pady=(0, 3))
-        tk.Label(card, text="관리자 계정 아이디: 연욱", bg="#202a3c", fg="#d6bd85",
+        tk.Label(card, text="온라인 계정 · 기기 간 진행 상황 동기화", bg="#202a3c", fg="#d6bd85",
                  font=("Malgun Gothic", 9)).pack(pady=(10, 0))
-        tk.Label(card, text="이 버전은 싱글 플레이 데모입니다.", bg="#202a3c", fg="#8292aa",
+        tk.Label(card, text="처음 접속할 때 서버 연결에 시간이 걸릴 수 있습니다.", bg="#202a3c", fg="#8292aa",
                  font=("Malgun Gothic", 9)).pack(pady=(5, 0))
         self.username_entry.bind("<Return>", lambda _e: self.password_entry.focus_set())
         self.password_entry.bind("<Return>", lambda _e: self.submit_auth())
@@ -199,43 +231,44 @@ class TaehyunRescue:
 
     def submit_auth(self):
         name, password = self.username_entry.get().strip(), self.password_entry.get()
-        self.users = read_json(USERS_FILE, {})
-        if self.mode == "signup":
-            if not 3 <= len(name) <= 18:
-                return self.auth_error("새 아이디는 3~18자로 입력해 주세요.")
-            if len(password) < 4:
-                return self.auth_error("비밀번호는 4자 이상이어야 합니다.")
-            if name == "연욱":
-                return self.auth_error("해당 아이디는 관리자 계정으로 예약되어 있습니다.")
-            if name in self.users:
-                return self.auth_error("이미 사용 중인 아이디입니다.")
-            salt, digest = hash_password(password)
-            self.users[name] = {"salt": salt, "hash": digest, "role": "player", "nickname": name, "banned": False}
-            write_json(USERS_FILE, self.users)
-        else:
-            record = self.users.get(name)
-            if not record:
-                return self.auth_error("아이디 또는 비밀번호가 올바르지 않습니다.")
-            _, digest = hash_password(password, record["salt"])
-            if not secrets.compare_digest(digest, record["hash"]):
-                return self.auth_error("아이디 또는 비밀번호가 올바르지 않습니다.")
-            if record.get("banned", False):
-                return self.auth_error("이 계정은 관리자에 의해 이용이 제한되었습니다.")
-        self.current_user = name
-        record = self.users[name]
-        self.nickname = record.get("nickname", name)
-        self.role = record.get("role", "player")
-        self.load_game(name)
+        if not name or not password:
+            return self.auth_error("아이디와 비밀번호를 입력해 주세요.")
+        endpoint = "/api/register" if self.mode == "signup" else "/api/login"
+        self.submit_btn.configure(state="disabled")
+        try:
+            result = api_request(endpoint, method="POST", payload={"username": name, "password": password})
+        except RuntimeError as exc:
+            self.submit_btn.configure(state="normal")
+            return self.auth_error(str(exc))
+        finally:
+            try:
+                self.submit_btn.configure(state="normal")
+            except tk.TclError:
+                pass
+        self.api_token = result.get("token")
+        self.current_user = result.get("username", name)
+        self.nickname = result.get("nickname", self.current_user)
+        self.role = result.get("role", "player")
+        self.load_game(self.current_user)
         self.show_game()
         if self.game_clear:
             self.set_message("태현이 구출 완료! 다시 모험하거나 기록을 확인하세요.", 5)
         elif self.message == "":
-            self.set_message("태현이를 구출하기 위한 모험이 시작됩니다!")
+            self.set_message("온라인 계정으로 모험을 시작합니다!")
 
     def load_game(self, name):
         self.saves = read_json(SAVE_FILE, {})
         data = default_save()
         saved = self.saves.get(name, {})
+        if self.api_token:
+            try:
+                saved = api_request("/api/save", token=self.api_token).get("save", {})
+                if not isinstance(saved, dict):
+                    saved = {}
+                self.saves[name] = saved
+                write_json(SAVE_FILE, self.saves)
+            except RuntimeError as exc:
+                self.set_message("서버 저장 데이터를 읽지 못했습니다: " + str(exc), 6)
         if isinstance(saved, dict):
             data.update(saved)
         # 기존 7지역 버전의 저장 파일은 13지역 캠페인과 구조가 다르므로 새 모험 진행만 초기화합니다.
@@ -310,14 +343,22 @@ class TaehyunRescue:
         if not self.current_user:
             return
         self.saves = read_json(SAVE_FILE, {})
-        self.saves[self.current_user] = self.save_payload()
-        write_json(SAVE_FILE, self.saves)
+        payload = self.save_payload()
+        self.saves[self.current_user] = payload
+        write_json(SAVE_FILE, self.saves)  # 서버 장애 시를 위한 이 PC의 임시 백업
+        if self.api_token:
+            try:
+                api_request("/api/save", method="PUT", payload=payload, token=self.api_token, timeout=10)
+            except RuntimeError:
+                # 자동 저장 중 일시적인 통신 오류가 나도 게임을 멈추지 않습니다.
+                pass
         self.last_save = time.time()
 
     def logout(self):
         self.tick_session += 1
         self.save_game(exiting=True)
         self.current_user = None
+        self.api_token = None
         self.keys.clear()
         self.root.unbind_all("<KeyPress>")
         self.root.unbind_all("<KeyRelease>")
@@ -707,44 +748,71 @@ class TaehyunRescue:
         self.set_message(f"환생 {self.rebirth_count}회! 공격력과 최대 HP 보너스를 얻었습니다.", 5)
 
     # -------------------------- 관리자 --------------------------
+    def refresh_admin_data(self):
+        if not self.api_token or self.role != "admin":
+            return False
+        try:
+            result = api_request("/api/admin/users", token=self.api_token)
+            profiles = result.get("users", [])
+            self.users = {
+                u["username"]: {
+                    "nickname": u.get("nickname", u["username"]),
+                    "role": u.get("role", "player"),
+                    "banned": bool(u.get("banned", False)),
+                }
+                for u in profiles
+            }
+            self.admin_saves = {u["username"]: u.get("save", {}) for u in profiles}
+            self.admin_targets = sorted(self.users.keys())
+            if self.admin_targets:
+                self.admin_target_index %= len(self.admin_targets)
+            return True
+        except RuntimeError as exc:
+            self.set_message("관리자 목록을 불러오지 못했습니다: " + str(exc), 5)
+            return False
+
     def toggle_panel(self, panel):
         if panel == "admin" and self.role != "admin":
             return self.set_message("관리자 전용 기능입니다.")
         self.active_panel = None if self.active_panel == panel else panel
         if panel == "admin" and self.active_panel == "admin":
-            self.users = read_json(USERS_FILE, {})
-            self.admin_targets = sorted(self.users.keys())
-            self.admin_target_index = min(self.admin_target_index, max(0, len(self.admin_targets)-1))
+            self.refresh_admin_data()
 
     def admin_target(self):
         if not self.admin_targets:
-            self.admin_targets = sorted(read_json(USERS_FILE, {}).keys())
+            self.refresh_admin_data()
         if not self.admin_targets:
             return None
         self.admin_target_index %= len(self.admin_targets)
         return self.admin_targets[self.admin_target_index]
 
     def admin_cycle(self, step):
-        self.users = read_json(USERS_FILE, {})
-        self.admin_targets = sorted(self.users.keys())
-        if self.admin_targets:
+        if self.refresh_admin_data() and self.admin_targets:
             self.admin_target_index = (self.admin_target_index + step) % len(self.admin_targets)
 
     def admin_get_save(self, name):
-        self.saves = read_json(SAVE_FILE, {})
+        if not name:
+            return default_save()
         if name == self.current_user:
             return self.save_payload()
         data = default_save()
-        data.update(self.saves.get(name, {}))
+        saved = self.admin_saves.get(name, {})
+        if isinstance(saved, dict):
+            data.update(saved)
         return data
 
     def admin_write_save(self, name, data):
-        self.saves = read_json(SAVE_FILE, {})
-        self.saves[name] = data
-        write_json(SAVE_FILE, self.saves)
-        if name == self.current_user:
-            self.load_game(name)
-            self.active_panel = "admin"
+        if not name or not self.api_token:
+            return self.set_message("온라인 관리자 서버에 연결되어 있지 않습니다.")
+        try:
+            api_request(f"/api/admin/user/{quote(name, safe='')}/save", method="PUT",
+                        payload=data, token=self.api_token)
+            self.admin_saves[name] = data
+            if name == self.current_user:
+                self.load_game(name)
+                self.active_panel = "admin"
+        except RuntimeError as exc:
+            self.set_message("관리자 저장 실패: " + str(exc), 5)
 
     def admin_add_gold(self):
         name = self.admin_target()
@@ -780,16 +848,16 @@ class TaehyunRescue:
 
     def admin_toggle_ban(self):
         name = self.admin_target()
-        if not name:
+        if not name or not self.api_token:
             return
-        if name == "연욱":
-            return self.set_message("관리자 계정은 이용 제한할 수 없습니다.")
-        self.users = read_json(USERS_FILE, {})
-        record = self.users.get(name, {})
-        record["banned"] = not record.get("banned", False)
-        self.users[name] = record
-        write_json(USERS_FILE, self.users)
-        self.set_message(f"{name}: 이용 제한 {'적용' if record['banned'] else '해제'}")
+        try:
+            api_request(f"/api/admin/user/{quote(name, safe='')}/action", method="POST",
+                        payload={"action": "toggle_ban"}, token=self.api_token)
+            self.refresh_admin_data()
+            record = self.users.get(name, {})
+            self.set_message(f"{name}: 이용 제한 {'적용' if record.get('banned') else '해제'}")
+        except RuntimeError as exc:
+            self.set_message("이용 제한 변경 실패: " + str(exc), 5)
 
     def admin_reset_save(self):
         name = self.admin_target()
@@ -1331,8 +1399,6 @@ class TaehyunRescue:
             if self.game_clear:
                 self.draw_text(sw/2,y2-27,"작전 성공! 태현이는 안전하게 구출되었습니다.",9,"#9ae0ab","center",True)
         elif panel == "admin":
-            self.users = read_json(USERS_FILE, {})
-            self.admin_targets = sorted(self.users.keys())
             target = self.admin_target()
             record = self.users.get(target, {}) if target else {}
             data = self.admin_get_save(target) if target else default_save()
@@ -1348,7 +1414,7 @@ class TaehyunRescue:
             banned = record.get("banned",False)
             self.click_button(x1+25,y1+231,x1+215,y1+268,"이용 제한 해제" if banned else "계정 이용 제한",self.admin_toggle_ban,target!="연욱","#7f4146" if target!="연욱" else None)
             self.click_button(x1+278,y1+231,x1+468,y1+268,"진행 초기화",self.admin_reset_save)
-            self.draw_text(sw/2,y2-26,"이 컴퓨터에 저장된 계정만 관리합니다.",9,"#b8c8da","center")
+            self.draw_text(sw/2,y2-26,"전체 계정을 온라인 서버에서 관리합니다.",9,"#b8c8da","center")
         self.click_button(sw/2-58,y2+8,sw/2+58,y2+38,"닫기 (ESC)",lambda:setattr(self,"active_panel",None))
 
     def tick(self, session):
