@@ -6,6 +6,7 @@ PC와 Android용 2D 횡스크롤 RPG 프로젝트입니다. 13개 지역을 돌�
 
 - **Windows PC:** Python 3 + tkinter. pygame은 필요하지 않습니다.
 - **Android:** Kivy 기반 프로젝트입니다. 저장소의 GitHub Actions에서 APK 빌드를 실행할 수 있습니다.
+- **온라인 계정 서버:** PC 버전은 공용 API에 연결하도록 변경되었습니다. Android 버전은 현재 별도 로컬 계정 방식이므로 아직 PC 계정과 자동 연동되지 않습니다.
 
 ## PC에서 실행
 
@@ -15,6 +16,18 @@ PC와 Android용 2D 횡스크롤 RPG 프로젝트입니다. 13개 지역을 돌�
 ```bat
 python taehyun_rescue.py
 ```
+
+PC 버전의 온라인 로그인 주소는 `TAEHYUN_API_URL` 환경 변수로 바꿀 수 있습니다. 기본 주소는 `https://taehyun-rescue-api.onrender.com`입니다. API가 아직 배포/연결되지 않은 상태라면 로그인은 작동하지 않습니다.
+
+## 온라인 API 서버 배포
+
+자세한 설명은 [README_ONLINE_KO.md](README_ONLINE_KO.md)를 참고하세요.
+
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn api:app --host 0.0.0.0 --port $PORT`
+- 비공개 환경 변수: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `APP_SECRET`, `DATABASE_URL`
+
+**중요:** `DATABASE_URL`을 설정하지 않으면 API는 테스트용 임시 SQLite 데이터베이스를 사용합니다. 이 방식은 다른 기기에서 같은 계정으로 로그인하는 테스트에는 쓸 수 있지만, Render 서비스가 재배포되거나 재시작되면 데이터가 사라질 수 있습니다. 실제 사용 전에는 보존 가능한 PostgreSQL 데이터베이스를 연결하고 `/health` 응답이 `"database": "postgresql"`인지 확인하세요. 비밀번호나 데이터베이스 주소를 소스 코드에 넣지 마세요.
 
 ## Android APK 빌드
 
@@ -35,6 +48,6 @@ python taehyun_rescue.py
 
 ## 계정과 저장 데이터
 
-- 기본 관리자 계정: 아이디 `연욱`, 비밀번호 `151013`
-- 계정과 진행 데이터는 기기별 로컬 저장 방식이며, 서버 계정이나 클라우드 동기화는 없습니다.
-- 관리자 기능은 해당 기기의 로컬 저장 데이터에만 적용됩니다. 공개 소스이므로 기본 게임 관리자 로그인 정보도 소스에서 확인할 수 있습니다.
+- PC 버전의 온라인 관리자 계정은 서버의 비공개 환경 변수에서 생성합니다. 비밀번호는 저장소에 올리지 않습니다.
+- 예전 PC의 로컬 계정 데이터가 온라인 서버로 자동 이관되지는 않습니다. 새 서버에서는 계정을 새로 만들거나 별도로 이관해야 합니다.
+- Android 앱은 온라인 계정 연동 작업이 별도로 필요합니다.
