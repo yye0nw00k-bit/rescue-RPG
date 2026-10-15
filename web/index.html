@@ -96,7 +96,7 @@ const zones=[
 {name:"그림자 성",need:30,sky:"#626e8a",hill:"#42455f",ground:"#393d50",story:"성 안쪽에서 태현이를 가둔 마왕이 마지막 문을 지키고 있다는 사실을 알았다.",mobs:["그림자 망령","검은 기사","저주받은 까마귀"],boss:"그림자 왕",bossHp:2800,damage:43,xp:1050,gold:1450},
 {name:"어둠의 감옥",need:34,sky:"#383b50",hill:"#292b3d",ground:"#292632",story:"마지막 문 뒤에 태현이가 갇혀 있다. 감금의 마왕을 쓰러뜨리자!",mobs:["감옥 경비병","어둠의 불꽃","저주 골렘"],boss:"감금의 마왕",bossHp:3600,damage:47,xp:1500,gold:2200}
 ];
-const zoneLength=1200,worldWidth=zoneLength*zones.length;
+const zoneLength=1450,worldWidth=zoneLength*zones.length;
 const defaultSave=()=>({player_x:100,level:1,exp:0,gold:0,attack:10,max_hp:100,hp:100,kills:0,weapon_level:0,armor_level:0,potions:3,crystals:0,boss_kills:0,cleared_zones:Array(zones.length).fill(false),checkpoint_zone:0,skill_points:0,skill_levels:{power:0,vitality:0},claimed_quests:[],achievements:[],pets:[],daily_claim:"",game_clear:false,rebirth_count:0,current_dialogue:null,taehyun_hunger:25,taehyun_happiness:70,taehyun_level:1,taehyun_exp:0,taehyun_feed_count:0,taehyun_play_count:0});
 let S=defaultSave(),token=localStorage.getItem("tr_token")||"",username=localStorage.getItem("tr_user")||"",role=localStorage.getItem("tr_role")||"player",authMode="login",enemies=[],held=new Set(),canvas=$("world"),ctx=canvas.getContext("2d"),lastFrame=0,lastSpawn=0,lastSave=0,lastHurt=0,lastAttack=0,toastUntil=0,toastTimer=null,saveBusy=false,saveAgain=false,bossZone=-1,attackFlash=0,raiseTimer=0;
 let playerY=0,vy=0,onGround=true,face=1,invulnerable=0;
