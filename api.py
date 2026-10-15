@@ -12,6 +12,7 @@ import time
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
@@ -33,6 +34,15 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "연욱").strip() or "연욱"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 app = FastAPI(title="태현이 구하기 온라인 API", docs_url=None, redoc_url=None, openapi_url=None)
+
+# Browser-based clients (web build) call this API from a separate Render static-site origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+)
 
 
 def _run(sql: str, params: dict | None = None, *, fetchone: bool = False, fetchall: bool = False):
