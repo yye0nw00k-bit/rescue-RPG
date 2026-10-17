@@ -3,11 +3,14 @@ title = 태현이 구하기(?)
 package.name = taehyunrescue
 package.domain = org.yeonwook
 source.dir = .
-source.include_exts = py,kv,json,png,jpg,atlas
-version = 1.0.0
-requirements = python3,kivy
+source.include_exts = py,kv,json,png,jpg,atlas,ttf,otf,txt
+version = 2.0.0
+requirements = python3,pygame
 orientation = landscape
 fullscreen = 1
+android.permissions = INTERNET
+p4a.bootstrap = sdl2
+p4a.local_recipes = ./p4a-recipes
 
 # Android build settings
 android.api = 36
