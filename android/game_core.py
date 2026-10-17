@@ -97,7 +97,7 @@ class TaehyunGame:
         self.active_field = "username"
         self.username_input = ""
         self.password_input = ""
-        self.notice = "기존 온라인 계정으로 로그인하거나 새 계정을 만들어 줘."
+        self.notice_text = "기존 온라인 계정으로 로그인하거나 새 계정을 만들어 줘."
         self.notice_error = False
         self.token = ""
         self.current_user = ""
@@ -737,7 +737,10 @@ class TaehyunGame:
     def run(self):
         while self.running:
             dt=min(.05,self.clock.tick(FPS)/1000.0)
-            for e in pygame.event.get():self.event(e)
+            for e in pygame.event.get():
+                self.event(e)
+                if not self.running:break
+            if not self.running:break
             self.update(dt)
             self.buttons=[]
             if self.view=="login":self.draw_login()
