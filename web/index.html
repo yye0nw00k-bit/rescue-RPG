@@ -24,7 +24,7 @@
   <p class="sub">열세 지역의 수호자를 넘어 마지막 마왕에게 도전해 봐. 구출에 성공하면 이번엔 태현이를 돌보는 시간이 시작돼.</p>
   <div class="switches"><button id="loginTab" class="active" type="button">로그인</button><button id="signupTab" type="button">회원가입</button></div>
   <form id="authForm">
-    <label class="field"><span>아이디</span><input id="username" autocomplete="username" minlength="3" maxlength="18" required placeholder="아이디 입력"></label>
+    <label class="field"><span>아이디</span><input id="username" autocomplete="username" minlength="2" maxlength="18" required placeholder="아이디 입력"></label>
     <label class="field"><span>비밀번호</span><input id="password" type="password" autocomplete="current-password" minlength="4" required placeholder="비밀번호 입력"></label>
     <button class="primary wide" id="authSubmit" type="submit">로그인하고 시작</button>
   </form>
@@ -109,7 +109,7 @@ function api(path,method,payload){
 function setNotice(text,type){$("authNotice").textContent=text;$("authNotice").className="notice"+(type?" "+type:"")}
 function toast(text,sec){const e=$("toast");e.textContent=text;e.classList.add("on");toastUntil=performance.now()+(sec||2.5)*1000;clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove("on"),(sec||2.5)*1000)}
 function setStatus(text){$("saveStatus").textContent=text}
-function chooseMode(mode){authMode=mode;$("loginTab").classList.toggle("active",mode==="login");$("signupTab").classList.toggle("active",mode==="signup");$("authSubmit").textContent=mode==="login"?"로그인하고 시작":"계정 만들기";$("password").autocomplete=mode==="login"?"current-password":"new-password";setNotice(mode==="login"?"기존 온라인 계정으로 로그인할 수 있어.":"아이디는 3~18자, 비밀번호는 4자 이상으로 만들어 줘.")}
+function chooseMode(mode){authMode=mode;$("loginTab").classList.toggle("active",mode==="login");$("signupTab").classList.toggle("active",mode==="signup");$("authSubmit").textContent=mode==="login"?"로그인하고 시작":"계정 만들기";$("username").minLength=mode==="login"?2:3;$("password").autocomplete=mode==="login"?"current-password":"new-password";setNotice(mode==="login"?"기존 온라인 계정으로 로그인할 수 있어.":"아이디는 3~18자, 비밀번호는 4자 이상으로 만들어 줘.")}
 $("loginTab").onclick=()=>chooseMode("login");$("signupTab").onclick=()=>chooseMode("signup");
 $("authForm").addEventListener("submit",async e=>{e.preventDefault();const n=$("username").value.trim(),p=$("password").value;if(!n||!p)return;const b=$("authSubmit");b.disabled=true;setNotice(authMode==="login"?"로그인 확인 중…":"계정을 만들고 있어…");try{const d=await api(authMode==="login"?"/api/login":"/api/register","POST",{username:n,password:p});token=d.token;username=d.username||n;role=d.role||"player";localStorage.setItem("tr_token",token);localStorage.setItem("tr_user",username);localStorage.setItem("tr_role",role);await enterGame()}catch(err){setNotice(err.message+" (첫 접속이면 서버가 깨어나는 데 잠시 걸릴 수 있어.)","error")}finally{b.disabled=false}});
 async function enterGame(){
