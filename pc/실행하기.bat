@@ -8,7 +8,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-python taehyun_rescue_pygame.py
+python chunsang_raising.py
 if errorlevel 1 (
   echo.
   echo 실행에 실패했습니다. Python 3와 Pygame 설치를 확인하세요.

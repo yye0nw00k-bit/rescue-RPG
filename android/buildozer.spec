@@ -1,10 +1,10 @@
 [app]
-title = 태현이 구하기(?)
-package.name = taehyunrescue
+title = 천상 키우기
+package.name = chunsangraising
 package.domain = org.yeonwook
 source.dir = .
 source.include_exts = py,kv,json,png,jpg,atlas,ttf,otf,txt
-version = 2.0.0
+version = 1.0.0
 requirements = python3,pygame
 orientation = landscape
 fullscreen = 1

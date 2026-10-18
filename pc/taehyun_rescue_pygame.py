@@ -1,4 +1,4 @@
-"""Windows launcher for the shared Pygame version."""
+"""Compatibility launcher for the old path; launches 천상 키우기."""
 from pathlib import Path
 import sys
 
