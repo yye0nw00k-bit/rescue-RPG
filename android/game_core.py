@@ -256,7 +256,7 @@ class ChunsangGame:
                     self.notice("접속 보상! 골드와 물약을 받았어.",4)
                 self.view="game"
                 self.save_status="온라인 연결됨"
-                if self.data.get("game_clear"):self.notice("태현이 키우기를 이어서 할 수 있어!",4)
+                if self.data.get("game_clear"):self.notice("천상 키우기 엔딩을 이어서 볼 수 있어!",4)
                 if self.role=="admin":self.load_admin()
             elif name=="save":
                 self.save_status="온라인 저장 완료"
