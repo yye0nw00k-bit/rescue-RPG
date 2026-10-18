@@ -238,7 +238,13 @@ async def login(request: Request):
 def me(authorization: str | None = Header(default=None)):
     """Return the authenticated user role so clients can refresh stale cached roles."""
     user = _user_from_token(authorization)
-    return {"username": user["username"], "nickname": user["nickname"], "role": user["role"]}
+    return {
+        "username": user["username"],
+        "nickname": user["nickname"],
+        "role": user["role"],
+        # Tell only the reserved admin account if its password env var was not configured.
+        "admin_setup_needed": user["username"] == ADMIN_USERNAME and not bool(ADMIN_PASSWORD),
+    }
 
 
 @app.get("/api/save")
