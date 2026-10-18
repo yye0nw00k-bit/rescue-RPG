@@ -15,7 +15,7 @@
 <div class="wrap">
 <header class="topbar">
   <div class="brand"><div class="brandMark">✦</div><div><div>천상 키우기</div><div class="tiny">13개 지역을 향한 모험</div></div></div>
-  <div class="topRight"><span class="status" id="saveStatus">온라인 저장 대기</span><button id="logoutBtn" class="quiet hidden">로그아웃</button></div>
+  <div class="topRight"><span class="status" id="saveStatus">온라인 저장 대기</span><button id="adminShortcut" class="quiet hidden" type="button">관리자</button><button id="logoutBtn" class="quiet hidden">로그아웃</button></div>
 </header>
 
 <section id="authView" class="panel authShell">
@@ -109,6 +109,10 @@ function chooseMode(mode){authMode=mode;$("loginTab").classList.toggle("active",
 $("loginTab").onclick=()=>chooseMode("login");$("signupTab").onclick=()=>chooseMode("signup");
 $("authForm").addEventListener("submit",async e=>{e.preventDefault();const n=$("username").value.trim(),p=$("password").value;if(!n||!p)return;const b=$("authSubmit");b.disabled=true;setNotice(authMode==="login"?"로그인 확인 중…":"계정을 만들고 있어…");try{const d=await api(authMode==="login"?"/api/login":"/api/register","POST",{username:n,password:p});token=d.token;username=d.username||n;role=d.role||"player";localStorage.setItem("tr_token",token);localStorage.setItem("tr_user",username);localStorage.setItem("tr_role",role);await enterGame()}catch(err){setNotice(err.message+" (첫 접속이면 서버가 깨어나는 데 잠시 걸릴 수 있어.)","error")}finally{b.disabled=false}});
 async function enterGame(){
+  setStatus("계정 권한 확인 중…");
+  const me=await api("/api/me");
+  username=me.username||username;role=me.role||"player";
+  localStorage.setItem("tr_user",username);localStorage.setItem("tr_role",role);
   setStatus("저장 데이터 불러오는 중…");
   const d=await api("/api/save");S=Object.assign(defaultSave(),d.save||{});
   if(!Array.isArray(S.cleared_zones)||S.cleared_zones.length!==zones.length){S.cleared_zones=Array(zones.length).fill(false);S.game_clear=false;S.player_x=100;S.checkpoint_zone=0;S.boss_kills=0}
@@ -117,12 +121,12 @@ async function enterGame(){
   enemies=[];held.clear();bossZone=-1;playerY=0;vy=0;onGround=true;invulnerable=0;
   const today=new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0")+"-"+String(new Date().getDate()).padStart(2,"0");
   if(S.daily_claim!==today){S.gold+=100+S.level*10;S.potions+=2;S.daily_claim=today;toast("접속 보상! 골드와 물약을 받았어.",4);scheduleSave()}
-  $("authView").classList.add("hidden");$("gameView").classList.remove("hidden");$("logoutBtn").classList.remove("hidden");$("profileLabel").textContent=username+(role==="admin"?" · 관리자":"");$("adminPanel").classList.toggle("hidden",role!=="admin");
+  $("authView").classList.add("hidden");$("gameView").classList.remove("hidden");$("logoutBtn").classList.remove("hidden");$("profileLabel").textContent=username+(role==="admin"?" · 관리자":"");$("adminPanel").classList.toggle("hidden",role!=="admin");$("adminShortcut").classList.toggle("hidden",role!=="admin");$("adminRefresh").classList.toggle("hidden",role!=="admin");
   syncPanels();refreshHUD();setStatus("온라인 연결됨");lastFrame=performance.now();lastSpawn=lastSave=performance.now();requestAnimationFrame(loop);
   if(role==="admin")loadAdmin();
 }
-function exitToLogin(){if(confirm("로그아웃할까? 진행 상황은 저장을 시도할게.")){saveNow().finally(()=>{token="";username="";role="player";localStorage.removeItem("tr_token");localStorage.removeItem("tr_user");localStorage.removeItem("tr_role");$("gameView").classList.add("hidden");$("authView").classList.remove("hidden");$("logoutBtn").classList.add("hidden");setStatus("로그아웃됨")})}}
-$("logoutBtn").onclick=exitToLogin;
+function exitToLogin(){if(confirm("로그아웃할까? 진행 상황은 저장을 시도할게.")){saveNow().finally(()=>{token="";username="";role="player";localStorage.removeItem("tr_token");localStorage.removeItem("tr_user");localStorage.removeItem("tr_role");$("gameView").classList.add("hidden");$("authView").classList.remove("hidden");$("logoutBtn").classList.add("hidden");setStatus("로그아웃됨");$("adminShortcut").classList.add("hidden");$("adminPanel").classList.add("hidden")})}}
+$("logoutBtn").onclick=exitToLogin;$("adminShortcut").onclick=()=>{$("adminPanel").scrollIntoView({behavior:"smooth",block:"start"})};
 function zoneIndex(){return Math.max(0,Math.min(zones.length-1,Math.floor(Math.max(0,S.player_x)/zoneLength)))}
 function clearedCount(){return S.cleared_zones.filter(Boolean).length}
 function attackPower(){return Math.max(1,Number(S.attack||10)+Number(S.weapon_level||0)*5+(S.pets||[]).length*2+Number(S.skill_levels.power||0)*3)}
@@ -131,12 +135,29 @@ function gainExp(num){S.exp+=Math.floor(num);let gained=0;while(S.exp>=S.level*3
 function makeMob(i){
  const z=zones[i],idx=Math.floor(Math.random()*z.mobs.length),base=22+i*20+S.level*3;
  const col=["#7cba81","#edc16d","#b98769","#8eb8bd","#bf8a7b"][idx%5];
- return {name:z.mobs[idx],x:Math.min((i+1)*zoneLength-390,Math.max(i*zoneLength+100,S.player_x+160+Math.random()*150)),hp:base,maxHp:base,damage:Math.max(4,5+i*2+Math.floor(S.level/5)),speed:30+i*1.5,xp:14+i*3+S.level*2,gold:12+i*3+S.level,colour:col,boss:false,attackAt:0,flash:0};
+ return {name:z.mobs[idx],x:Math.min((i+1)*zoneLength-390,Math.max(i*zoneLength+100,S.player_x+80+Math.random()*100)),hp:base,maxHp:base,damage:Math.max(4,5+i*2+Math.floor(S.level/5)),speed:30+i*1.5,xp:14+i*3+S.level*2,gold:12+i*3+S.level,colour:col,boss:false,attackAt:0,flash:0};
 }
 function makeBoss(i){const z=zones[i];return {name:z.boss,x:(i+1)*zoneLength-255,hp:z.bossHp,maxHp:z.bossHp,damage:z.damage,speed:18+i*1.2,xp:z.xp,gold:z.gold,colour:["#4f9f8a","#bd655d","#72b8c9","#9384c4","#a49c83","#d75b44","#4b9eae","#79a8d8","#6b83bf","#738d64","#847ee2","#625183","#bd4764"][i],boss:true,zoneIndex:i,attackAt:0,flash:0};}
 function spawnBoss(i){if(S.cleared_zones[i]||bossZone===i||enemies.some(e=>e.boss))return;enemies=enemies.filter(e=>!e.boss);enemies.push(makeBoss(i));bossZone=i;toast("수호자 등장: "+zones[i].boss+"!",4)}
 function defeat(e){const i=enemies.indexOf(e);if(i<0)return;enemies.splice(i,1);S.gold+=e.gold;S.kills++;if(e.boss){const zi=e.zoneIndex;S.boss_kills++;S.cleared_zones[zi]=true;S.checkpoint_zone=Math.min(zones.length-1,zi+1);S.potions+=2;S.crystals+=2+zi;gainExp(e.xp);if(S.boss_kills===1&&!S.pets.includes("꼬마 슬라임"))S.pets.push("꼬마 슬라임");if(S.boss_kills===3&&!S.pets.includes("불꽃 여우"))S.pets.push("불꽃 여우");if(zi===zones.length-1){S.game_clear=true;syncPanels();toast("최종 보스 격파! 천상 키우기 완료!",6)}else toast(zones[zi].name+" 클리어! 다음 길이 열렸어.",4);scheduleSave()}else{gainExp(e.xp);if(S.kills%8===0)S.potions++}refreshHUD();scheduleSave()}
-function attack(mult){const now=performance.now();if(now-lastAttack<340)return;lastAttack=now;attackFlash=.22;const range=mult>1?245:165;let targets=enemies.filter(e=>Math.abs(e.x-S.player_x)<=range).sort((a,b)=>Math.abs(a.x-S.player_x)-Math.abs(b.x-S.player_x));if(!targets.length){toast("사정거리 안에 적이 없어.",1.2);return}const selected=mult>1?targets.slice(0,3):targets.slice(0,1);selected.forEach(e=>{const dmg=Math.max(1,Math.floor(attackPower()*(mult||1)*(0.86+Math.random()*.28)));e.hp-=dmg;e.flash=.16;if(e.hp<=0)defeat(e)});if(mult>1&&S.skill_points>0&&S.skill_levels.power===0){S.skill_points--;S.skill_levels.power=1;toast("강타! 공격 스킬이 강화됐어.",2)}}
+function attack(mult){
+ const now=performance.now();
+ if(now-lastAttack<260)return;
+ lastAttack=now;attackFlash=.22;
+ const range=mult>1?420:300;
+ const targets=enemies.filter(e=>Math.abs(e.x-S.player_x)<=range)
+   .sort((a,b)=>Math.abs(a.x-S.player_x)-Math.abs(b.x-S.player_x));
+ if(!targets.length){toast("몬스터 가까이에서 공격해 봐.",1.2);return}
+ const selected=mult>1?targets.slice(0,3):targets.slice(0,1);
+ let totalDamage=0,hitCount=0;
+ selected.forEach(e=>{
+   const dmg=Math.max(1,Math.floor(attackPower()*(mult||1)*(0.86+Math.random()*.28)));
+   e.hp=Math.max(0,e.hp-dmg);e.flash=.2;totalDamage+=dmg;hitCount++;
+   if(e.hp<=0)defeat(e)
+ });
+ if(mult>1&&S.skill_points>0&&S.skill_levels.power===0){S.skill_points--;S.skill_levels.power=1}
+ if(!S.game_clear)toast("명중! "+totalDamage+" 피해"+(hitCount>1?" · "+hitCount+"마리":"")+"",1.1)
+}
 function usePotion(){if(S.potions<=0){toast("물약이 없어. 골드로 구매할 수 있어.");return}if(S.hp>=S.max_hp){toast("체력이 이미 가득해.");return}S.potions--;S.hp=Math.min(S.max_hp,S.hp+Math.max(40,Math.floor(S.max_hp*.45)));refreshHUD();toast("회복 물약을 사용했어.");scheduleSave()}
 function scheduleSave(){setStatus("저장 대기…");clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveNow(),1100)}
 let saveTimer=null;
