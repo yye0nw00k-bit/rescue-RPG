@@ -68,6 +68,7 @@
     <div class="victoryActions"><button id="rebirthBtn" class="primary">↻ 다시 모험하기 <small>환생 보너스 유지</small></button><button id="saveAfterWinBtn">지금 저장</button><button id="logoutAfterWinBtn">로그아웃</button></div>
   </section>
 
+  <section id="adminSetupNotice" class="panel adminPanel hidden"><h3>관리자 계정 설정 필요</h3><p class="tiny">Render 대시보드에서 <strong>taehyun-rescue-api</strong> 서비스의 <code>ADMIN_PASSWORD</code> 환경 변수를 설정하고 재배포해야 관리자 계정이 활성화돼.</p></section>
   <section id="adminPanel" class="panel adminPanel hidden"><h3>관리자 · 계정 관리</h3><div id="adminUsers" class="tiny">계정 목록을 불러오는 중…</div></section>
 </main>
 <div class="foot">천상 키우기 · 브라우저에서 실행 · 진행 상황은 온라인 계정에 저장돼</div>
@@ -112,6 +113,7 @@ async function enterGame(){
   setStatus("계정 권한 확인 중…");
   const me=await api("/api/me");
   username=me.username||username;role=me.role||"player";
+  $("adminSetupNotice").classList.toggle("hidden",!me.admin_setup_needed);
   localStorage.setItem("tr_user",username);localStorage.setItem("tr_role",role);
   setStatus("저장 데이터 불러오는 중…");
   const d=await api("/api/save");S=Object.assign(defaultSave(),d.save||{});
@@ -125,7 +127,7 @@ async function enterGame(){
   syncPanels();refreshHUD();setStatus("온라인 연결됨");lastFrame=performance.now();lastSpawn=lastSave=performance.now();requestAnimationFrame(loop);
   if(role==="admin")loadAdmin();
 }
-function exitToLogin(){if(confirm("로그아웃할까? 진행 상황은 저장을 시도할게.")){saveNow().finally(()=>{token="";username="";role="player";localStorage.removeItem("tr_token");localStorage.removeItem("tr_user");localStorage.removeItem("tr_role");$("gameView").classList.add("hidden");$("authView").classList.remove("hidden");$("logoutBtn").classList.add("hidden");setStatus("로그아웃됨");$("adminShortcut").classList.add("hidden");$("adminPanel").classList.add("hidden")})}}
+function exitToLogin(){if(confirm("로그아웃할까? 진행 상황은 저장을 시도할게.")){saveNow().finally(()=>{token="";username="";role="player";localStorage.removeItem("tr_token");localStorage.removeItem("tr_user");localStorage.removeItem("tr_role");$("gameView").classList.add("hidden");$("authView").classList.remove("hidden");$("logoutBtn").classList.add("hidden");setStatus("로그아웃됨");$("adminShortcut").classList.add("hidden");$("adminPanel").classList.add("hidden");$("adminSetupNotice").classList.add("hidden")})}}
 $("logoutBtn").onclick=exitToLogin;$("adminShortcut").onclick=()=>{$("adminPanel").scrollIntoView({behavior:"smooth",block:"start"})};
 function zoneIndex(){return Math.max(0,Math.min(zones.length-1,Math.floor(Math.max(0,S.player_x)/zoneLength)))}
 function clearedCount(){return S.cleared_zones.filter(Boolean).length}
