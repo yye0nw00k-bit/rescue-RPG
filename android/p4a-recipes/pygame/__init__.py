@@ -1,9 +1,13 @@
-"""Use a current Pygame source release for Android builds.
+"""Pygame 2.6.1 Android recipe, with a Cython 3.1 compatibility workaround.
 
-The stock python-for-android recipe may use an older Pygame release on
-newer host Python toolchains. This override requests Pygame 2.6.1 instead.
-The Android build still needs to be tested on a real device.
+Pygame's optional src_c/cython/pygame/_sprite.pyx currently fails Cython
+3.1's compiler ("Illegal use of special attribute __dict__"). The public
+pygame.sprite Python module does not import this optional extension, so omit
+only that extension from the Android build. Desktop Pygame remains unchanged.
 """
+import os
+from os.path import join
+
 from pythonforandroid.recipes.pygame import Pygame2Recipe
 
 
@@ -11,6 +15,13 @@ class Pygame261Recipe(Pygame2Recipe):
     version = "2.6.1"
     url = "https://github.com/pygame/pygame/archive/{version}.tar.gz"
     hostpython_prerequisites = ["setuptools", "cython>=3.1"]
+
+    def prebuild_arch(self, arch):
+        super().prebuild_arch(arch)
+        build_dir = self.get_build_dir(arch.arch)
+        optional_sprite = join(build_dir, "src_c", "cython", "pygame", "_sprite.pyx")
+        if os.path.exists(optional_sprite):
+            os.remove(optional_sprite)
 
 
 recipe = Pygame261Recipe()
