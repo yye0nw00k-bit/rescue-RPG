@@ -9,6 +9,7 @@ requirements = python3,pygame
 orientation = landscape
 fullscreen = 1
 android.permissions = INTERNET
+android.accept_sdk_license = True
 p4a.bootstrap = sdl2
 p4a.local_recipes = ./p4a-recipes
 

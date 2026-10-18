@@ -61,7 +61,9 @@ jobs:
 
       - name: Build APK
         working-directory: android
-        run: buildozer -v android debug
+        run: |
+          set +o pipefail
+          yes | buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
