@@ -46,9 +46,7 @@ def default_save():
         "kills":0,"weapon_level":0,"armor_level":0,"potions":3,"crystals":0,"boss_kills":0,
         "cleared_zones":[False]*len(ZONES),"checkpoint_zone":0,"skill_points":0,
         "skill_levels":{"power":0,"vitality":0},"claimed_quests":[],"achievements":[],"pets":[],
-        "daily_claim":"","game_clear":False,"rebirth_count":0,"current_dialogue":None,
-        "taehyun_hunger":25.0,"taehyun_happiness":70.0,"taehyun_level":1,"taehyun_exp":0,
-        "taehyun_feed_count":0,"taehyun_play_count":0
+        "daily_claim":"","game_clear":False,"rebirth_count":0,"current_dialogue":None
     }
 
 
@@ -83,10 +81,10 @@ def mix(a, b, ratio):
     return tuple(round(x+(y-x)*ratio) for x,y in zip(a,b))
 
 
-class TaehyunGame:
+class ChunsangGame:
     def __init__(self):
         pygame.init()
-        pygame.display.set_caption("태현이 구하기(?)")
+        pygame.display.set_caption("천상 키우기")
         self.android = sys.platform == "android" or "ANDROID_ARGUMENT" in os.environ
         self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN) if self.android else pygame.display.set_mode((W,H), pygame.RESIZABLE)
         self.canvas = pygame.Surface((W,H))
@@ -110,7 +108,6 @@ class TaehyunGame:
         self.save_again = False
         self.save_status = "온라인 서버 연결"
         self.last_save = time.monotonic()
-        self.last_raise_tick = 0
         self.buttons = []
         self.fields = {}
         self.keys = set()
@@ -238,6 +235,9 @@ class TaehyunGame:
                 self.role=auth.get("role","player")
                 self.data=default_save()
                 self.data.update(save)
+                # Drop obsolete pet-raising fields from older saves.
+                for old_field in ("taehyun_hunger","taehyun_happiness","taehyun_level","taehyun_exp","taehyun_feed_count","taehyun_play_count"):
+                    self.data.pop(old_field,None)
                 cleared=self.data.get("cleared_zones",[])
                 if not isinstance(cleared,list) or len(cleared)!=len(ZONES):
                     self.data["cleared_zones"]=[False]*len(ZONES)
@@ -389,10 +389,10 @@ class TaehyunGame:
             if i<len(ZONES)-1:
                 self.data["gold"]+=150+i*25
                 npc=NPCS[i]
-                self.notice(e["name"]+" 격파! "+npc+": 태현이는 여기에 없어요. 보상을 받았어!",5)
+                self.notice(e["name"]+" 격파! "+npc+"에게서 보상을 받았어!",5)
             else:
                 self.data["game_clear"]=True
-                self.notice("태현이를 구했어! 이제 태현이 키우기!",6)
+                self.notice("최종 보스 격파! 천상 키우기 완료!",6)
             self.save()
         else:
             self.gain_exp(e["exp"])
@@ -406,14 +406,6 @@ class TaehyunGame:
         self.data["hp"]=min(self.data["max_hp"],self.data["hp"]+max(40,self.data["max_hp"]//2))
         self.notice("회복 물약을 사용했어.")
         self.save()
-
-    def care_exp(self,amount):
-        self.data["taehyun_exp"]+=amount
-        while self.data["taehyun_exp"]>=int(self.data["taehyun_level"])*20:
-            self.data["taehyun_exp"]-=int(self.data["taehyun_level"])*20
-            self.data["taehyun_level"]+=1
-            self.data["gold"]+=25
-            self.notice("태현이 레벨 업! Lv.%s"%self.data["taehyun_level"],3)
 
     def action(self,a):
         if isinstance(a,tuple) and a[0]=="admin_action":self.admin_action(a[1],a[2]);return
@@ -441,18 +433,20 @@ class TaehyunGame:
         elif a=="armor":
             if self.data["gold"]<100:self.notice("골드 100 G가 필요해.")
             else:self.data["gold"]-=100;self.data["armor_level"]+=1;self.notice("방어구 강화 완료!");self.save()
-        elif a=="feed":
-            if self.data["gold"]<25:self.notice("밥을 사려면 골드 25 G가 필요해.")
-            else:
-                self.data["gold"]-=25;self.data["taehyun_hunger"]=max(0,self.data["taehyun_hunger"]-28);self.data["taehyun_happiness"]=min(100,self.data["taehyun_happiness"]+3);self.data["taehyun_feed_count"]+=1;self.care_exp(8);self.notice("태현이가 맛있게 먹었어!");self.save()
-        elif a=="play":
-            self.data["taehyun_happiness"]=min(100,self.data["taehyun_happiness"]+16);self.data["taehyun_hunger"]=min(100,self.data["taehyun_hunger"]+5);self.data["taehyun_play_count"]+=1;self.care_exp(10);self.notice("태현이와 즐겁게 놀았어!");self.save()
-        elif a=="train":
-            if self.data["gold"]<20:self.notice("훈련하려면 골드 20 G가 필요해.")
-            else:self.data["gold"]-=20;self.data["attack"]+=1;self.data["taehyun_happiness"]=max(0,self.data["taehyun_happiness"]-2);self.care_exp(12);self.notice("함께 훈련했어. 공격력 +1!");self.save()
         elif a=="rebirth":
-            keep={k:self.data.get(k) for k in ("taehyun_hunger","taehyun_happiness","taehyun_level","taehyun_exp","taehyun_feed_count","taehyun_play_count","gold","daily_claim","rebirth_count")}
-            self.data=default_save();self.data.update(keep);self.data["attack"]=10+int(keep.get("rebirth_count") or 0)*2;self.data["rebirth_count"]=int(keep.get("rebirth_count") or 0)+1;self.enemies.clear();self.view="game";self.notice("다시 모험을 시작했어! 키우기 기록은 유지돼.",4);self.save()
+            old_gold=int(self.data.get("gold",0))
+            old_daily=self.data.get("daily_claim","")
+            old_rebirths=int(self.data.get("rebirth_count",0))+1
+            self.data=default_save()
+            self.data["gold"]=old_gold
+            self.data["daily_claim"]=old_daily
+            self.data["rebirth_count"]=old_rebirths
+            self.data["attack"]=10+(old_rebirths-1)*2
+            self.enemies.clear()
+            self.view="game"
+            self.notice("새 모험을 시작했어! 환생 보너스가 적용됐어.",4)
+            self.save()
+
 
     def jump(self):
         if self.on_ground and self.view=="game" and not self.data.get("game_clear"):
@@ -464,10 +458,6 @@ class TaehyunGame:
         if self.view!="game":return
         if now-self.last_save>20:self.save()
         if self.data.get("game_clear"):
-            if now-self.last_raise_tick>3:
-                self.data["taehyun_hunger"]=min(100,float(self.data["taehyun_hunger"])+.06)
-                self.data["taehyun_happiness"]=max(0,float(self.data["taehyun_happiness"])-.025)
-                self.last_raise_tick=now
             return
         self.attack_cd=max(0,self.attack_cd-dt);self.attack_flash=max(0,self.attack_flash-dt);self.invulnerable=max(0,self.invulnerable-dt)
         if "left" in self.pointer_held or pygame.K_LEFT in self.keys or pygame.K_a in self.keys:self.data["player_x"]-=205*dt;self.facing=-1
@@ -568,7 +558,7 @@ class TaehyunGame:
 
     def draw_game(self):
         c=self.canvas
-        if self.data.get("game_clear"):self.draw_raising();return
+        if self.data.get("game_clear"):self.draw_victory();return
         camera=clamp(self.data["player_x"]-W*.36,0,max(0,WORLD_W-W));self.camera_x=camera
         self.draw_bg(self.zone,camera)
         for e in self.enemies:self.draw_enemy(e,camera)
@@ -599,37 +589,26 @@ class TaehyunGame:
         self.button((390,476,112,48),"무기 강화","weapon","quiet",True)
         self.button((510,476,112,48),"방어 강화","armor","quiet",True)
 
-    def draw_raising(self):
+    def draw_victory(self):
         c=self.canvas
-        for y in range(0,H,8):pygame.draw.rect(c,mix((143,199,198),(224,213,183),y/H),(0,y,W,8))
-        pts=[(0,465)]+[(x,int(425-math.sin((x+time.monotonic()*18)/100)*10)) for x in range(0,W+30,30)]+[(W,H),(0,H)]
-        pygame.draw.polygon(c,(126,171,133),pts);pygame.draw.rect(c,(96,142,96),(0,475,W,65))
-        self.panel((165,20,630,75),(27,45,52),(77,110,103),13)
-        self.text("RESCUE COMPLETE",185,32,10,(232,202,139));self.text("이제 태현이 키우기!",185,51,24,(247,239,215))
-        x,y=480,337
-        pygame.draw.ellipse(c,(60,92,73),(418,423,124,24));pygame.draw.ellipse(c,(211,173,111),(x-32,y-12,64,83));pygame.draw.ellipse(c,(238,207,162),(x-26,y-65,52,55))
-        pygame.draw.arc(c,(47,56,51),(x-21,y-52,42,31),math.pi,2*math.pi,5);pygame.draw.circle(c,(44,50,48),(x-8,y-39),3);pygame.draw.circle(c,(44,50,48),(x+8,y-39),3)
-        self.text("태현이와 즐겁게 지내 보자",480,265,14,(41,62,57),True)
-        self.panel((18,116,924,94),(31,47,53),(73,103,100),12)
-        hunger=clamp(self.data["taehyun_hunger"],0,100);mood=clamp(self.data["taehyun_happiness"],0,100)
-        self.text("배고픔",38,132,12,(224,231,224));self.text("%d / 100"%round(hunger),150,132,12,(249,231,187))
-        pygame.draw.rect(c,(13,23,27),(38,157,380,10),border_radius=5);pygame.draw.rect(c,(214,172,103),(38,157,int(380*hunger/100),10),border_radius=5)
-        self.text("기분",510,132,12,(224,231,224));self.text("%d / 100"%round(mood),615,132,12,(183,225,197))
-        pygame.draw.rect(c,(13,23,27),(510,157,380,10),border_radius=5);pygame.draw.rect(c,(124,188,151),(510,157,int(380*mood/100),10),border_radius=5)
-        self.panel((18,220,924,50),(31,47,53),(73,103,100),12)
-        self.text("태현이 Lv.%s · EXP %s/%s"%(self.data["taehyun_level"],self.data["taehyun_exp"],int(self.data["taehyun_level"])*20),34,238,12)
-        self.text("먹이 %s회 · 놀이 %s회"%(self.data["taehyun_feed_count"],self.data["taehyun_play_count"]),322,238,12)
-        self.text("%s G"%self.data["gold"],790,238,13,(246,222,174))
-        self.button((18,464,220,54),"밥 주기 · 25 G","feed","primary")
-        self.button((251,464,220,54),"같이 놀기","play")
-        self.button((484,464,220,54),"함께 훈련 · 20 G","train")
-        self.button((717,464,225,54),"다시 모험하기","rebirth","quiet")
-        self.button((18,81,104,28),"저장","save","quiet",True)
-        self.button((130,81,104,28),"로그아웃","logout","quiet",True)
-        if self.role=="admin":self.button((808,81,134,28),"관리자 메뉴","admin","quiet",True)
+        self.draw_bg(ZONES[-1],self.camera_x)
+        pygame.draw.rect(c,(20,29,40),(120,58,720,390),border_radius=20)
+        pygame.draw.rect(c,(85,103,119),(120,58,720,390),2,border_radius=20)
+        self.text("CHUNSANG ADVENTURE",480,100,11,(222,190,127),True)
+        self.text("천상 키우기",480,143,30,(247,229,190),True)
+        self.text("최종 보스 격파!",480,194,23,(236,239,233),True)
+        self.text("13개 지역의 모험을 모두 완료했어.",480,235,14,(184,199,210),True)
+        self.text("레벨 %s  ·  처치 %s  ·  골드 %s G"%(self.data.get("level",1),self.data.get("kills",0),self.data.get("gold",0)),480,270,13,(224,204,160),True)
+        self.button((190,326,250,52),"다시 모험하기","rebirth","primary")
+        self.button((458,326,125,52),"지금 저장","save","quiet")
+        self.button((593,326,170,52),"로그아웃","logout","quiet")
+        if self.role=="admin":
+            self.button((783,70,40,32),"⚙","admin","quiet",True)
         if time.monotonic()<self.toast_until:
-            pygame.draw.rect(c,(30,42,51),(232,91,490,34),border_radius=9)
-            self.text(self.toast,477,108,11,(250,229,193),True)
+            edge=(157,87,80) if self.toast_error else (85,106,117)
+            pygame.draw.rect(c,(30,42,51),(235,404,490,32),border_radius=9)
+            pygame.draw.rect(c,edge,(235,404,490,32),1,border_radius=9)
+            self.text(self.toast,480,420,11,(250,229,193),True)
 
     def draw_admin(self):
         c=self.canvas;c.fill((21,27,37));self.panel((20,18,920,504),(30,39,52),(61,75,91),16)
@@ -654,7 +633,7 @@ class TaehyunGame:
     def draw_login(self):
         c=self.canvas;c.fill((21,27,37));pygame.draw.ellipse(c,(31,48,59),(-190,-220,650,500));pygame.draw.ellipse(c,(33,44,51),(610,340,510,360))
         self.panel((240,36,480,468),(31,40,53),(58,73,90),17)
-        self.text("✦",480,83,28,(225,189,116),True);self.text("태현이 구하기(?)",480,124,28,(246,224,179),True);self.text("작은 모험, 큰 구출 작전",480,154,12,(167,184,195),True)
+        self.text("✦",480,83,28,(225,189,116),True);self.text("천상 키우기",480,124,28,(246,224,179),True);self.text("13개 지역을 돌파하고 최종 보스에 도전하자",480,154,12,(167,184,195),True)
         self.button((276,178,197,35),"로그인","login","primary" if self.auth_mode=="login" else "quiet")
         self.button((487,178,197,35),"회원가입","signup","primary" if self.auth_mode=="signup" else "quiet")
         self.text("아이디",278,230,11,(202,211,219));self.text("비밀번호",278,304,11,(202,211,219))
@@ -755,7 +734,7 @@ class TaehyunGame:
 
 
 def main():
-    return TaehyunGame().run()
+    return ChunsangGame().run()
 
 
 if __name__=="__main__":
