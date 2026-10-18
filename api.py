@@ -234,6 +234,13 @@ async def login(request: Request):
     return {"token": _token_for(username), "username": username, "nickname": row["nickname"], "role": row["role"]}
 
 
+@app.get("/api/me")
+def me(authorization: str | None = Header(default=None)):
+    """Return the authenticated user role so clients can refresh stale cached roles."""
+    user = _user_from_token(authorization)
+    return {"username": user["username"], "nickname": user["nickname"], "role": user["role"]}
+
+
 @app.get("/api/save")
 def get_save(authorization: str | None = Header(default=None)):
     user = _user_from_token(authorization)
