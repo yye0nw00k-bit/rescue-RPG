@@ -38,6 +38,10 @@ jobs:
         shell: pwsh
         run: Copy-Item -LiteralPath "pc/EXE_사용법.txt" -Destination "dist/사용법.txt"
 
+      - name: Prepare English-named EXE copy
+        shell: pwsh
+        run: Copy-Item -LiteralPath "dist/천상 키우기.exe" -Destination "dist/ChunsangKiwoogi.exe" -Force
+
       - name: Package downloadable ZIP
         shell: pwsh
         run: Compress-Archive -Path "dist/천상 키우기.exe", "dist/사용법.txt" -DestinationPath "dist/ChunsangKiwoogi-Windows.zip" -Force
@@ -53,7 +57,7 @@ jobs:
             ZIP 파일을 내려받아 압축을 풀고 천상 키우기.exe를 실행하세요.
           files: |
             dist/ChunsangKiwoogi-Windows.zip
-            dist/천상 키우기.exe
+            dist/ChunsangKiwoogi.exe
           overwrite_files: true
           make_latest: true
         env:
@@ -65,7 +69,7 @@ jobs:
           name: chunsang-kiwoogi-windows
           path: |
             dist/ChunsangKiwoogi-Windows.zip
-            dist/천상 키우기.exe
+            dist/ChunsangKiwoogi.exe
             dist/사용법.txt
           if-no-files-found: error
           retention-days: 30
