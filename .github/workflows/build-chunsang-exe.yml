@@ -1,0 +1,49 @@
+name: Build Chunsang Kiwoogi EXE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pc/chunsang_kiwoogi.py"
+      - "pc/EXE_사용법.txt"
+      - ".github/workflows/build-chunsang-exe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check Python syntax
+        run: python -m py_compile pc/chunsang_kiwoogi.py
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build Windows executable
+        run: pyinstaller --clean --noconfirm --onefile --windowed --name "천상 키우기" pc/chunsang_kiwoogi.py
+
+      - name: Include usage guide
+        shell: pwsh
+        run: Copy-Item -LiteralPath "pc/EXE_사용법.txt" -Destination "dist/사용법.txt"
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunsang-kiwoogi-windows
+          path: |
+            dist/천상 키우기.exe
+            dist/사용법.txt
+          if-no-files-found: error
+          retention-days: 30
