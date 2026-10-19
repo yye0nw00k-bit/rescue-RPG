@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows-exe:
@@ -38,11 +38,33 @@ jobs:
         shell: pwsh
         run: Copy-Item -LiteralPath "pc/EXE_사용법.txt" -Destination "dist/사용법.txt"
 
+      - name: Package downloadable ZIP
+        shell: pwsh
+        run: Compress-Archive -Path "dist/천상 키우기.exe", "dist/사용법.txt" -DestinationPath "dist/ChunsangKiwoogi-Windows.zip" -Force
+
+      - name: Publish public download release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: chunsang-kiwoogi-v1
+          target_commitish: main
+          name: 천상 키우기 Windows
+          body: |
+            천상 키우기 Windows 실행 파일입니다.
+            ZIP 파일을 내려받아 압축을 풀고 천상 키우기.exe를 실행하세요.
+          files: |
+            dist/ChunsangKiwoogi-Windows.zip
+            dist/천상 키우기.exe
+          overwrite_files: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: chunsang-kiwoogi-windows
           path: |
+            dist/ChunsangKiwoogi-Windows.zip
             dist/천상 키우기.exe
             dist/사용법.txt
           if-no-files-found: error
